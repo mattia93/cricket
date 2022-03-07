@@ -3,7 +3,7 @@ import click
 import numpy as np
 from constants import HELPS, ERRORS, KEYS, FILENAMES
 import matplotlib
-from plan_generator import PlanGeneratorMultiPerc
+from plan_generator import SimplePlanGenerator
 from params_generator import ParamsGenerator
 matplotlib.use('agg')
 from sklearn import metrics
@@ -25,7 +25,7 @@ from optuna.samplers import TPESampler
 from tensorflow.keras.metrics import Precision, Recall
 
 
-def build_network_single_fact(generator: PlanGeneratorMultiPerc,
+def build_network_single_fact(generator: SimplePlanGenerator,
                               embedding_params: dict = None,
                               hidden_layers: int = 1,
                               regularizer_params: dict = None,
@@ -106,11 +106,11 @@ def print_network_details(model: Model, params: dict, save_file: str = None) -> 
 
 
 def train_network(model: Model,
-                  train_generator: PlanGeneratorMultiPerc,
+                  train_generator: SimplePlanGenerator,
                   epochs: int = 3,
                   verbose: int = 2,
                   callbacks: list = None,
-                  validation_generator: PlanGeneratorMultiPerc = None) -> dict:
+                  validation_generator: SimplePlanGenerator = None) -> dict:
     history = model.fit(x=train_generator,
                         validation_data=validation_generator,
                         epochs=epochs,
@@ -155,7 +155,7 @@ def print_metrics(y_true: list, y_pred: list, dizionario_goal: dict, save_dir: s
     return [accuracy, hamming_loss]
 
 
-def get_model_predictions(model: Model, test_generator: PlanGeneratorMultiPerc) -> list:
+def get_model_predictions(model: Model, test_generator: SimplePlanGenerator) -> list:
     y_pred = list()
     y_true = list()
     for i in range(test_generator.__len__()):
@@ -199,20 +199,28 @@ def get_callback_default_params(callback_name: str) -> dict:
 
 def objective(trial: optuna.Trial,
               model_name: str,
-              train_plans: list,
-              val_plans: list,
+              train_plans_folder: str,
+              val_plans_folder: str,
               dizionario: dict,
               dizionario_goal: dict,
               max_plan_dim: int,
-              plan_percentage_min: float,
-              plan_percentage_max: float,
               epochs: int,
               batch_size: int):
-    if train_plans is not None and dizionario is not None and dizionario_goal is not None:
-        train_generator = PlanGeneratorMultiPerc(train_plans, dizionario, dizionario_goal, batch_size, max_plan_dim,
-                                                 plan_percentage_min, plan_percentage_max)
-        val_generator = PlanGeneratorMultiPerc(val_plans, dizionario, dizionario_goal, batch_size, max_plan_dim,
-                                               plan_percentage_min, plan_percentage_max, shuffle=False)
+
+    if train_plans_folder is not None and dizionario is not None and dizionario_goal is not None:
+        train_plans_filenames = [join(train_plans_folder, filename) for filename
+                                 in os.listdir(train_plans_folder) if filename.startswith('obs')]
+        train_generator = SimplePlanGenerator(filenames=train_plans_filenames,
+                                              actions_dict=dizionario,
+                                              batch_size=batch_size,
+                                              max_dim=max_plan_dim)
+        val_plans_filenames = [join(val_plans_folder, filename) for filename in
+                               os.listdir(val_plans_folder) if filename.startswith('obs')]
+        val_generator = SimplePlanGenerator(filenames=val_plans_filenames,
+                                            actions_dict=dizionario,
+                                            batch_size=batch_size,
+                                            max_dim=max_plan_dim,
+                                            shuffle=False)
 
     use_dropout = trial.suggest_categorical('use_dropout', [True, False])
     if use_dropout:
@@ -267,7 +275,7 @@ def run_tests(model: Model, test_plans: list, dizionario: dict, dizionario_goal:
               min_plan_perc: float, plan_percentage: float, save_dir: str, filename='metrics') -> None:
     if test_plans is not None:
         test_plans = test_plans[0]
-        test_generator = PlanGeneratorMultiPerc(test_plans, dizionario, dizionario_goal, batch_size,
+        test_generator = SimplePlanGenerator(test_plans, dizionario, dizionario_goal, batch_size,
                                                 max_plan_dim, min_plan_perc, plan_percentage, shuffle=False)
         y_pred, y_true = get_model_predictions(model, test_generator)
         scores = print_metrics(y_true=y_true, y_pred=y_pred, dizionario_goal=dizionario_goal, save_dir=save_dir,
@@ -365,16 +373,25 @@ def network_train(ctx):
         plot_dir = join(model_dir, FILENAMES.NETWORK_PLOTS_FOLDER)
         os.makedirs(plot_dir, exist_ok=True)
 
-        [train_plans, val_plans] = load_from_pickles(read_plans_dir, [FILENAMES.TRAIN_PLANS_FILENAME,
-                                                                      FILENAMES.VALIDATION_PLANS_FILENAME])
-        if train_plans is not None and dizionario is not None and dizionario_goal is not None:
-            train_generator = PlanGeneratorMultiPerc(train_plans, dizionario, dizionario_goal,
-                                                     batch_size, max_plan_dim, min_plan_percentage, max_plan_percentage)
+        train_plans_folder = join(read_plans_dir, FILENAMES.TRAIN_PLANS_DIR)
+        val_plans_folder = join(read_plans_dir, FILENAMES.VALIDATION_PLANS_DIR)
+
+        if train_plans_folder is not None and dizionario is not None and dizionario_goal is not None:
+            train_plans_filenames = [join(train_plans_folder, filename) for filename
+                                     in os.listdir(train_plans_folder) if filename.startswith('obs')]
+            train_generator = SimplePlanGenerator(filenames=train_plans_filenames,
+                                                  actions_dict=dizionario,
+                                                  batch_size=batch_size,
+                                                  max_dim=max_plan_dim)
             val_generator = None
-            if val_plans is not None:
-                val_generator = PlanGeneratorMultiPerc(val_plans, dizionario, dizionario_goal, batch_size,
-                                                       max_plan_dim, min_plan_percentage, max_plan_percentage,
-                                                       shuffle=False)
+            if val_plans_folder is not None:
+                val_plans_filenames = [join(val_plans_folder, filename) for filename in
+                                       os.listdir(val_plans_folder) if filename.startswith('obs')]
+                val_generator = SimplePlanGenerator(filenames=val_plans_filenames,
+                                                    actions_dict=dizionario,
+                                                    batch_size=batch_size,
+                                                    max_dim=max_plan_dim,
+                                                    shuffle=False)
 
             model = build_network_single_fact(train_generator, **params)
             print_network_details(model, params)
