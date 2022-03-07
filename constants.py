@@ -1,4 +1,8 @@
 class ERRORS:
+    MSG_ERROR_BOTH_ATTENTION_TIME_DISTRIB = (
+        "Error in the selected parameters.\n"
+        "Cannot use both Attention Mechanism and Time Distributed layers."
+    )
     MSG_ERROR_LOAD_PARAMS = "Error while loading the parameters"
     MSG_ERROR_LOAD_PLANS = f"Error while loading the plans"
     STD_ERROR_LOAD_FILE = "Error while loading {0}"

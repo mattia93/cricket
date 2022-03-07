@@ -45,6 +45,7 @@ class ParamsGenerator:
         self.table.loc[17] = ["hidden_layers", [1]]
         self.table.loc[18] = ["l1", [None]]
         self.table.loc[19] = ["l2", [None]]
+        self.table.loc[20] = ["use_time_distributed", [False]]
 
     @staticmethod
     def __create_list(element: Any, new_val: Any):
@@ -95,6 +96,7 @@ class ParamsGenerator:
                 },
             ],
             "use_attention": self.table.loc[8][self.k2][choice[8]],
+            "use_time_distributed": self.loc[20][self.k2][choice[20]],
             "optimizer_list": [
                 self.table.loc[9][self.k2][choice[9]],
                 {
