@@ -16,6 +16,8 @@ class CREATE_TRAIN_TEST:
 
 
 class FILENAMES:
+    VALIDATION_PLANS_DIR = 'val'
+    TRAIN_PLANS_DIR = 'train'
     STATS_FILENAME = "stats.txt"
     TRAIN_PLANS_FILENAME = "train_plans"
     VALIDATION_PLANS_FILENAME = "val_plans"
