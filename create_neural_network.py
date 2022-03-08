@@ -169,12 +169,24 @@ def get_model_predictions(model: Model, test_generator: SimplePlanGenerator) -> 
     y_true = list()
     for i in range(test_generator.__len__()):
         x, y = test_generator.__getitem__(i)
-        y_pred.extend(model.predict(x))
-        y_true.extend(y)
+        lengths = list()
+        for l in x:
+            full_length = True
+            for index, el in enumerate(l):
+                if el == 0:
+                    lengths.append(index)
+                    full_length = False
+                    break
+            if full_length:
+                lengths.append(test_generator.max_dim)
+        predicions = model.predict(x)
+        for index, l in enumerate(x):
+            y_pred.extend(predicions[index][:lengths[index]])
+            y_true.extend(y[index][:lengths[index]])
     return y_pred, y_true
 
 
-def create_model_dir_name(params: dict, epochs: int, max_plan_percentage: float, batch_size: int):
+def create_model_dir_name(params: dict, epochs: int, batch_size: int):
     hidden_layer_dim = params['recurrent_list'][1]['units']
     embedding_dim = params['embedding_params']['output_dim']
     dropout = params['recurrent_list'][1]['dropout']
@@ -257,7 +269,10 @@ def objective(trial: optuna.Trial,
                              dropout=dropout,
                              recurrent_dropout=recurrent_dropout,
                              l1=l1,
-                             l2=l2)
+                             l2=l2,
+                             use_attention=False,
+                             use_time_distributed=True,
+                             lr=0.0001)
     params = params.generate(1)[0]
 
     model = build_network_single_fact(train_generator, **params)
