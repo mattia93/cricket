@@ -78,7 +78,7 @@ def build_network_single_fact(generator: SimplePlanGenerator,
         output_dense = Dense(1, activation='sigmoid')
         outputs = TimeDistributed(output_dense)(prev_layer)
     else:
-        outputs = Dense(len(generator.dizionario_goal), activation='sigmoid', name='output')(prev_layer)
+        outputs = Dense(1), activation='sigmoid', name='output')(prev_layer)
 
     optimizer_type, optimizer_params = optimizer_list
     if optimizer_type == 'adam':
@@ -142,11 +142,11 @@ def save_plot(history: dict, plot_dir: str = None) -> None:
                 ylabel='Loss')
 
 
-def print_metrics(y_true: list, y_pred: list, dizionario_goal: dict, save_dir: str = None,
+def print_metrics(y_true: list, y_pred: list, save_dir: str = None,
                   filename: str = 'metrics') -> list:
     for i, y in enumerate(y_pred):
         y_pred[i] = [0 if pred < 0.5 else 1 for pred in y]
-    labels = list(dizionario_goal.keys())
+    labels = []
     to_print = []
     accuracy = metrics.accuracy_score(y_true, y_pred)
     hamming_loss = metrics.hamming_loss(y_true, y_pred)
@@ -211,12 +211,11 @@ def objective(trial: optuna.Trial,
               train_plans_folder: str,
               val_plans_folder: str,
               dizionario: dict,
-              dizionario_goal: dict,
               max_plan_dim: int,
               epochs: int,
               batch_size: int):
 
-    if train_plans_folder is not None and dizionario is not None and dizionario_goal is not None:
+    if train_plans_folder is not None and dizionario is not None:
         train_plans_filenames = [join(train_plans_folder, filename) for filename
                                  in os.listdir(train_plans_folder) if filename.startswith('obs')]
         train_generator = SimplePlanGenerator(filenames=train_plans_filenames,
@@ -279,15 +278,15 @@ def objective(trial: optuna.Trial,
     return result
 
 
-def run_tests(model: Model, test_plans: list, dizionario: dict, dizionario_goal: dict, batch_size: int,
+def run_tests(model: Model, test_plans: list, dizionario: dict, batch_size: int,
               max_plan_dim: int,
               min_plan_perc: float, plan_percentage: float, save_dir: str, filename='metrics') -> None:
     if test_plans is not None:
         test_plans = test_plans[0]
-        test_generator = SimplePlanGenerator(test_plans, dizionario, dizionario_goal, batch_size,
+        test_generator = SimplePlanGenerator(test_plans, dizionario, batch_size,
                                                 max_plan_dim, min_plan_perc, plan_percentage, shuffle=False)
         y_pred, y_true = get_model_predictions(model, test_generator)
-        scores = print_metrics(y_true=y_true, y_pred=y_pred, dizionario_goal=dizionario_goal, save_dir=save_dir,
+        scores = print_metrics(y_true=y_true, y_pred=y_pred, save_dir=save_dir,
                                filename=filename)
 
 
@@ -323,14 +322,13 @@ def run():
 @click.option('--max-plan-dim', 'max_plan_dim', required=True, prompt=True, help=HELPS.MAX_PLAN_LENGTH, type=click.INT)
 def train_model(ctx, target_dir, max_plan_percentage, batch_size, read_dict_dir, epochs, min_plan_percentage,
         read_plans_dir, max_plan_dim):
-    [dizionario, dizionario_goal] = load_from_pickles(read_dict_dir, ['dizionario', 'dizionario_goal'])
+    [dizionario] = load_from_pickles(read_dict_dir, ['dizionario'])
 
     max_plan_dim = int(max_plan_percentage * max_plan_dim)
 
-    if dizionario is not None and dizionario_goal is not None and max_plan_dim > 0:
+    if dizionario is not None and max_plan_dim > 0:
         ctx.ensure_object(dict)
         ctx.obj[KEYS.ACTION_DICT] = dizionario
-        ctx.obj[KEYS.GOALS_DICT] = dizionario_goal
         ctx.obj[KEYS.EPOCHS] = epochs
         ctx.obj[KEYS.BATCH_SIZE] = batch_size
         ctx.obj[KEYS.MAX_PLAN_PERC] = max_plan_percentage
@@ -370,7 +368,6 @@ def network_train(ctx):
         params = ctx.obj[KEYS.PARAMS]
         model_dir = ctx.obj[KEYS.MODEL_DIR]
         dizionario = ctx.obj[KEYS.ACTION_DICT]
-        dizionario_goal = ctx.obj[KEYS.GOALS_DICT]
         epochs = ctx.obj[KEYS.EPOCHS]
         batch_size = ctx.obj[KEYS.BATCH_SIZE]
         read_plans_dir = ctx.obj[KEYS.READ_PLANS_DIR]
@@ -385,7 +382,7 @@ def network_train(ctx):
         train_plans_folder = join(read_plans_dir, FILENAMES.TRAIN_PLANS_DIR)
         val_plans_folder = join(read_plans_dir, FILENAMES.VALIDATION_PLANS_DIR)
 
-        if train_plans_folder is not None and dizionario is not None and dizionario_goal is not None:
+        if train_plans_folder is not None and dizionario is not None:
             train_plans_filenames = [join(train_plans_folder, filename) for filename
                                      in os.listdir(train_plans_folder) if filename.startswith('obs')]
             train_generator = SimplePlanGenerator(filenames=train_plans_filenames,
@@ -430,7 +427,6 @@ def network_results(ctx, incremental_tests):
         params = ctx.obj[KEYS.PARAMS]
         model_dir = ctx.obj[KEYS.MODEL_DIR]
         dizionario = ctx.obj[KEYS.ACTION_DICT]
-        dizionario_goal = ctx.obj[KEYS.GOALS_DICT]
         batch_size = ctx.obj[KEYS.BATCH_SIZE]
         read_plans_dir = ctx.obj[KEYS.READ_PLANS_DIR]
         max_plan_percentage = ctx.obj[KEYS.MAX_PLAN_PERC]
@@ -452,7 +448,7 @@ def network_results(ctx, incremental_tests):
         for f in files:
             test_plans = load_from_pickles(test_dir, [f])
             if not (test_plans is None) and len(test_plans) > 0:
-                run_tests(model=model, test_plans=test_plans, dizionario=dizionario, dizionario_goal=dizionario_goal,
+                run_tests(model=model, test_plans=test_plans, dizionario=dizionario,
                           batch_size=batch_size, max_plan_dim=max_plan_dim, min_plan_perc=min_plan_percentage,
                           plan_percentage=max_plan_percentage, save_dir=model_dir, filename=f'metrics_{f}')
             else:
@@ -469,7 +465,6 @@ def optuna_train(ctx, model_name, db_dir, n_trials):
 
     if ctx.ensure_object(dict):
         dizionario = ctx.obj[KEYS.ACTION_DICT]
-        dizionario_goal = ctx.obj[KEYS.GOALS_DICT]
         batch_size = ctx.obj[KEYS.BATCH_SIZE]
         read_plans_dir = ctx.obj[KEYS.READ_PLANS_DIR]
         max_plan_percentage = ctx.obj[KEYS.MAX_PLAN_PERC]
@@ -491,7 +486,6 @@ def optuna_train(ctx, model_name, db_dir, n_trials):
         study.optimize(
             lambda trial: objective(trial=trial,
                                     dizionario=dizionario,
-                                    dizionario_goal=dizionario_goal,
                                     model_name=model_name,
                                     train_plans=train_plans,
                                     val_plans=val_plans,
