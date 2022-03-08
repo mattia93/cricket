@@ -78,7 +78,7 @@ def build_network_single_fact(generator: SimplePlanGenerator,
         output_dense = Dense(1, activation='sigmoid')
         outputs = TimeDistributed(output_dense)(prev_layer)
     else:
-        outputs = Dense(1), activation='sigmoid', name='output')(prev_layer)
+        outputs = Dense(1, activation='sigmoid', name='output')(prev_layer)
 
     optimizer_type, optimizer_params = optimizer_list
     if optimizer_type == 'adam':
