@@ -96,7 +96,7 @@ class ParamsGenerator:
                 },
             ],
             "use_attention": self.table.loc[8][self.k2][choice[8]],
-            "use_time_distributed": self.loc[20][self.k2][choice[20]],
+            "use_time_distributed": self.table.loc[20][self.k2][choice[20]],
             "optimizer_list": [
                 self.table.loc[9][self.k2][choice[9]],
                 {
