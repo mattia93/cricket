@@ -9,7 +9,7 @@ matplotlib.use('agg')
 from sklearn import metrics
 from tensorflow.keras.models import Model, Sequential
 from tensorflow.keras.layers import Input
-from tensorflow.keras.layers import Dense, LSTM, Embedding, GRU, Bidirectional
+from tensorflow.keras.layers import Dense, LSTM, Embedding, GRU, Bidirectional, TimeDistributed
 from attention_extraction_layers import AttentionWeights, ContextVector
 from tensorflow.keras.optimizers import SGD, Adam
 from tensorflow.keras.callbacks import ModelCheckpoint, EarlyStopping
@@ -31,6 +31,7 @@ def build_network_single_fact(generator: SimplePlanGenerator,
                               regularizer_params: dict = None,
                               recurrent_list: list = ['lstm', None],
                               use_attention: bool = True,
+                              use_time_distributed: bool = False,
                               optimizer_list: list = ['adam', None],
                               loss_function: Union[Loss, str] = 'binary_crossentropy',
                               model_name: str = 'model') -> Model:
@@ -64,12 +65,20 @@ def build_network_single_fact(generator: SimplePlanGenerator,
             recurrent_layer = Bidirectional(layer=lstm)(prev_layer)
         prev_layer = recurrent_layer
 
+    if use_time_distributed and use_attention:
+        print(ERRORS.MSG_ERROR_BOTH_ATTENTION_TIME_DISTRIB)
+        return None
+
     if use_attention:
         attention_weights = AttentionWeights(generator.max_dim, name='attention_weights')(prev_layer)
         context_vector = ContextVector()([prev_layer, attention_weights])
         prev_layer = context_vector
 
-    outputs = Dense(len(1), activation='sigmoid', name='output')(prev_layer)
+    if use_time_distributed:
+        output_dense = Dense(1, activation='sigmoid')
+        outputs = TimeDistributed(output_dense)(prev_layer)
+    else:
+        outputs = Dense(1), activation='sigmoid', name='output')(prev_layer)
 
     optimizer_type, optimizer_params = optimizer_list
     if optimizer_type == 'adam':
