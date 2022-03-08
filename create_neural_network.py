@@ -185,7 +185,7 @@ def create_model_dir_name(params: dict, epochs: int, max_plan_percentage: float,
 
     model_dir_name = (f'{model_name}_{recurrent_type}_epochs={epochs}_embedding={embedding_dim}_units=' +
                       f'{hidden_layer_dim}_dropout={dropout}_recurrent-dropout={recurrent_dropout}_loss=' +
-                      f'{loss_function}_plan-percentage={max_plan_percentage}_batch-size={batch_size}')
+                      f'{loss_function}_batch-size={batch_size}')
 
     return model_dir_name
 
@@ -279,12 +279,11 @@ def objective(trial: optuna.Trial,
 
 
 def run_tests(model: Model, test_plans: list, dizionario: dict, batch_size: int,
-              max_plan_dim: int,
-              min_plan_perc: float, plan_percentage: float, save_dir: str, filename='metrics') -> None:
+              max_plan_dim: int, save_dir: str, filename='metrics') -> None:
     if test_plans is not None:
         test_plans = test_plans[0]
         test_generator = SimplePlanGenerator(test_plans, dizionario, batch_size,
-                                                max_plan_dim, min_plan_perc, plan_percentage, shuffle=False)
+                                                max_plan_dim, shuffle=False)
         y_pred, y_true = get_model_predictions(model, test_generator)
         scores = print_metrics(y_true=y_true, y_pred=y_pred, save_dir=save_dir,
                                filename=filename)
@@ -309,30 +308,21 @@ def run():
 @click.pass_context
 @click.option('--target-dir', 'target_dir', required=True, prompt=True, type=click.STRING,
               help=f'{HELPS.MODEL_DIR_OUT} {HELPS.CREATE_IF_NOT_EXISTS}')
-@click.option('--plan-perc', 'max_plan_percentage', required=True, prompt=True, help=HELPS.MAX_PLAN_PERCENTAGE,
-              type=click.FloatRange(0, 1))
 @click.option('--batch-size', 'batch_size', default=64, type=click.INT, help=HELPS.BATCH_SIZE, show_default=True)
 @click.option('--read-dict-dir', 'read_dict_dir', required=True, prompt=True,
               help=HELPS.DICT_FOLDER_SRC, type=click.STRING)
 @click.option('--epochs', default=50, help=HELPS.EPOCHS, type=click.INT, show_default=True)
-@click.option('--min-plan-perc', 'min_plan_percentage', default=0.3, type=click.FloatRange(0, 1),
-              help=HELPS.MIN_PLAN_PERCENTAGE, show_default=True)
 @click.option('--read-plans-dir', 'read_plans_dir', required=True, prompt=True,
               help=HELPS.PLANS_FOLDER_SRC, type=click.STRING)
 @click.option('--max-plan-dim', 'max_plan_dim', required=True, prompt=True, help=HELPS.MAX_PLAN_LENGTH, type=click.INT)
-def train_model(ctx, target_dir, max_plan_percentage, batch_size, read_dict_dir, epochs, min_plan_percentage,
-        read_plans_dir, max_plan_dim):
-    [dizionario] = load_from_pickles(read_dict_dir, ['dizionario'])
-
-    max_plan_dim = int(max_plan_percentage * max_plan_dim)
+def train_model(ctx, target_dir, batch_size, read_dict_dir, epochs, read_plans_dir, max_plan_dim):
+    [dizionario] = load_from_pickles(read_dict_dir, [FILENAMES.ACTION_DICT_FILENAME])
 
     if dizionario is not None and max_plan_dim > 0:
         ctx.ensure_object(dict)
         ctx.obj[KEYS.ACTION_DICT] = dizionario
         ctx.obj[KEYS.EPOCHS] = epochs
         ctx.obj[KEYS.BATCH_SIZE] = batch_size
-        ctx.obj[KEYS.MAX_PLAN_PERC] = max_plan_percentage
-        ctx.obj[KEYS.MIN_PLAN_PERC] = min_plan_percentage
         ctx.obj[KEYS.READ_PLANS_DIR] = read_plans_dir
         ctx.obj[KEYS.MAX_PLAN_DIM] = max_plan_dim
         ctx.obj[KEYS.TARGET_DIR] = target_dir
@@ -347,13 +337,12 @@ def neural_network(ctx, params_dir):
         target_dir = ctx.obj[KEYS.TARGET_DIR]
         epochs = ctx.obj[KEYS.EPOCHS]
         batch_size = ctx.obj[KEYS.BATCH_SIZE]
-        max_plan_percentage = ctx.obj[KEYS.MAX_PLAN_PERC]
 
         params = load_file(params_dir,
                            load_ok=ERRORS.STD_LOAD_FILE_OK.format(os.path.basename(params_dir),
                                                                   os.path.dirname(params_dir)),
                            error=ERRORS.STD_ERROR_LOAD_FILE.format(os.path.basename(params_dir)))
-        model_dir_name = create_model_dir_name(params, epochs, max_plan_percentage, batch_size)
+        model_dir_name = create_model_dir_name(params, epochs, batch_size)
         model_dir = join(target_dir, model_dir_name)
         os.makedirs(model_dir, exist_ok=True)
 
@@ -371,8 +360,6 @@ def network_train(ctx):
         epochs = ctx.obj[KEYS.EPOCHS]
         batch_size = ctx.obj[KEYS.BATCH_SIZE]
         read_plans_dir = ctx.obj[KEYS.READ_PLANS_DIR]
-        max_plan_percentage = ctx.obj[KEYS.MAX_PLAN_PERC]
-        min_plan_percentage = ctx.obj[KEYS.MIN_PLAN_PERC]
         max_plan_dim = ctx.obj[KEYS.MAX_PLAN_DIM]
 
         model_name = params['model_name']
@@ -429,8 +416,6 @@ def network_results(ctx, incremental_tests):
         dizionario = ctx.obj[KEYS.ACTION_DICT]
         batch_size = ctx.obj[KEYS.BATCH_SIZE]
         read_plans_dir = ctx.obj[KEYS.READ_PLANS_DIR]
-        max_plan_percentage = ctx.obj[KEYS.MAX_PLAN_PERC]
-        min_plan_percentage = ctx.obj[KEYS.MIN_PLAN_PERC]
         max_plan_dim = ctx.obj[KEYS.MAX_PLAN_DIM]
 
         model_name = params['model_name']
@@ -449,8 +434,8 @@ def network_results(ctx, incremental_tests):
             test_plans = load_from_pickles(test_dir, [f])
             if not (test_plans is None) and len(test_plans) > 0:
                 run_tests(model=model, test_plans=test_plans, dizionario=dizionario,
-                          batch_size=batch_size, max_plan_dim=max_plan_dim, min_plan_perc=min_plan_percentage,
-                          plan_percentage=max_plan_percentage, save_dir=model_dir, filename=f'metrics_{f}')
+                          batch_size=batch_size, max_plan_dim=max_plan_dim, save_dir=model_dir,
+                          filename=f'metrics_{f}')
             else:
                 print(f'Problems with file {f} in folder {test_dir}')
 
@@ -467,12 +452,12 @@ def optuna_train(ctx, model_name, db_dir, n_trials):
         dizionario = ctx.obj[KEYS.ACTION_DICT]
         batch_size = ctx.obj[KEYS.BATCH_SIZE]
         read_plans_dir = ctx.obj[KEYS.READ_PLANS_DIR]
-        max_plan_percentage = ctx.obj[KEYS.MAX_PLAN_PERC]
-        min_plan_percentage = ctx.obj[KEYS.MIN_PLAN_PERC]
         max_plan_dim = ctx.obj[KEYS.MAX_PLAN_DIM]
         epochs = ctx.obj[KEYS.EPOCHS]
         target_dir = ctx.obj[KEYS.TARGET_DIR]
 
+        train_plans_folder = join(read_plans_dir, FILENAMES.TRAIN_PLANS_DIR)
+        val_plans_folder = join(read_plans_dir, FILENAMES.VALIDATION_PLANS_DIR)
 
         os.makedirs(db_dir, exist_ok=True)
         study = create_study(model_name, db_dir)
@@ -481,17 +466,14 @@ def optuna_train(ctx, model_name, db_dir, n_trials):
         ctx.obj[KEYS.STUDY] = study
         ctx.obj[KEYS.MODEL_NAME] = model_name
 
-        [train_plans, val_plans] = load_from_pickles(read_plans_dir, [FILENAMES.TRAIN_PLANS_FILENAME,
-                                                                      FILENAMES.VALIDATION_PLANS_FILENAME])
+
         study.optimize(
             lambda trial: objective(trial=trial,
                                     dizionario=dizionario,
                                     model_name=model_name,
-                                    train_plans=train_plans,
-                                    val_plans=val_plans,
+                                    train_plans_folder=train_plans_folder,
+                                    val_plans_folder=val_plans_folder,
                                     max_plan_dim=max_plan_dim,
-                                    plan_percentage_min=min_plan_percentage,
-                                    plan_percentage_max=max_plan_percentage,
                                     epochs=epochs,
                                     batch_size=batch_size),
             n_trials=n_trials,
