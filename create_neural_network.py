@@ -38,7 +38,7 @@ def build_network_single_fact(generator: SimplePlanGenerator,
     prev_layer = inputs
 
     if embedding_params is not None:
-        embedding_layer = Embedding(input_dim=len(generator.dizionario) + 1,
+        embedding_layer = Embedding(input_dim=len(generator.actions_dict) + 1,
                                     input_length=generator.max_dim,
                                     **embedding_params)(prev_layer)
         prev_layer = embedding_layer

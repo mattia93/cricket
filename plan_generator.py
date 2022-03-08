@@ -26,7 +26,7 @@ class SimplePlanGenerator(Sequence):
                     Y[i][pos] = y[pos]
                 else:
                     break
-        return X, Y
+        return X, Y.reshape(self.batch_size, self.max_dim, 1)
 
     def __len__(self):
         return len(self.filenames) // self.batch_size
